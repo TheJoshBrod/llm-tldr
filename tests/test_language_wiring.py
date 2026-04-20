@@ -33,6 +33,7 @@ SUPPORTED_LANGUAGES = {
     "scala": [".scala", ".sc"],
     "lua": [".lua"],
     "luau": [".luau"],
+    "jac": [".jac"],
     "elixir": [".ex", ".exs"],
 }
 

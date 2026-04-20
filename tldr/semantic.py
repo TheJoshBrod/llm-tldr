@@ -23,7 +23,7 @@ from typing import List, Optional, Tuple, Dict, Any
 
 logger = logging.getLogger("tldr.semantic")
 
-ALL_LANGUAGES = ["python", "typescript", "javascript", "go", "rust", "java", "c", "cpp", "ruby", "php", "kotlin", "swift", "csharp", "scala", "lua", "luau", "elixir"]
+ALL_LANGUAGES = ["python", "typescript", "javascript", "go", "rust", "java", "c", "cpp", "ruby", "php", "kotlin", "swift", "csharp", "scala", "lua", "luau", "elixir", "jac"]
 
 # Lazy imports for heavy dependencies
 _model = None

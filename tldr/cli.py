@@ -68,6 +68,7 @@ EXTENSION_TO_LANGUAGE = {
     '.sc': 'scala',
     '.lua': 'lua',
     '.luau': 'luau',
+    '.jac': 'jac',
     '.ex': 'elixir',
     '.exs': 'elixir',
 }
@@ -195,7 +196,7 @@ Semantic Search:
         "--lang",
         default="auto",
         choices=["auto", "all", "python", "typescript", "javascript", "go", "rust", "java", "c",
-                 "cpp", "ruby", "php", "kotlin", "swift", "csharp", "scala", "lua", "luau", "elixir"],
+                 "cpp", "ruby", "php", "kotlin", "swift", "csharp", "scala", "lua", "luau", "elixir", "jac"],
         help="Language to analyze (auto=use cached, all=detect all)",
     )
     struct_p.add_argument(
@@ -234,7 +235,7 @@ Semantic Search:
         "--lang",
         default="python",
         choices=["python", "typescript", "javascript", "go", "rust", "java", "c",
-                 "cpp", "ruby", "php", "kotlin", "swift", "csharp", "scala", "lua", "luau", "elixir"],
+                 "cpp", "ruby", "php", "kotlin", "swift", "csharp", "scala", "lua", "luau", "elixir", "jac"],
         help="Language",
     )
 
@@ -361,7 +362,7 @@ Semantic Search:
     warm_p.add_argument(
         "--lang",
         default="all",
-        choices=["python", "typescript", "javascript", "go", "rust", "java", "c", "cpp", "ruby", "php", "kotlin", "swift", "csharp", "scala", "lua", "luau", "elixir", "all"],
+        choices=["python", "typescript", "javascript", "go", "rust", "java", "c", "cpp", "ruby", "php", "kotlin", "swift", "csharp", "scala", "lua", "luau", "elixir", "jac", "all"],
         help="Language (default: auto-detect all)",
     )
 
@@ -377,7 +378,7 @@ Semantic Search:
     index_p.add_argument(
         "--lang",
         default="python",
-        choices=["python", "typescript", "javascript", "go", "rust", "java", "c", "cpp", "ruby", "php", "kotlin", "swift", "csharp", "scala", "lua", "luau", "elixir", "all"],
+        choices=["python", "typescript", "javascript", "go", "rust", "java", "c", "cpp", "ruby", "php", "kotlin", "swift", "csharp", "scala", "lua", "luau", "elixir", "jac", "all"],
         help="Language (use 'all' for multi-language)",
     )
     index_p.add_argument(
