@@ -606,7 +606,7 @@ class JacASTExtractor:
         if node.base_classes:
             for base in node.base_classes:
                 try:
-                    bases.append(base.unparse())
+                    bases.append(self._get_name(base))
                 except Exception:
                     pass
 
@@ -621,10 +621,11 @@ class JacASTExtractor:
         # Extract abilities (methods)
         try:
             from jaclang.jac0core.unitree import Ability
-            for item in node.body:
-                if isinstance(item, Ability):
-                    method = self._extract_ability(item, is_method=True)
-                    class_info.methods.append(method)
+            if node.body:
+                for item in node.body:
+                    if isinstance(item, Ability):
+                        method = self._extract_ability(item, is_method=True)
+                        class_info.methods.append(method)
         except ImportError:
             pass
 
@@ -638,11 +639,13 @@ class JacASTExtractor:
 
         if node.signature:
             sig = node.signature
+            # Handle regular abilities
             if hasattr(sig, "params") and sig.params is not None:
                 for p in sig.params:
                     param_name = self._get_name(p.name)
                     if hasattr(p, "type_tag") and p.type_tag:
                         try:
+                            # Use unparse or manual string if available
                             param_name += f": {p.type_tag.tag.unparse()}"
                         except Exception:
                             pass
@@ -653,6 +656,19 @@ class JacASTExtractor:
                     return_type = sig.return_type.unparse()
                 except Exception:
                     pass
+        
+        # Handle walker visit/entry events
+        from jaclang.jac0core.unitree import EventSignature
+        for k in node.kid:
+            if isinstance(k, EventSignature):
+                event_name = self._get_name(k.event) if hasattr(k, "event") else "event"
+                # Looking for the 'with X' part in kids
+                target = "any"
+                for sk in k.kid:
+                    if hasattr(sk, "sym_name") and sk.sym_name not in ("with", "entry", "exit"):
+                        target = sk.sym_name
+                        break
+                params.append(f"{event_name}_on: {target}")
 
         return FunctionInfo(
             name=name,
