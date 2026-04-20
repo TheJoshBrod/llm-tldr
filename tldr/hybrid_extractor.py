@@ -16,7 +16,7 @@ import os
 from pathlib import Path
 from typing import Any
 
-from .ast_extractor import extract_python, ModuleInfo, FunctionInfo, ClassInfo, ImportInfo, CallGraphInfo
+from .ast_extractor import extract_python, extract_jac, ModuleInfo, FunctionInfo, ClassInfo, ImportInfo, CallGraphInfo
 from .signature_extractor_pygments import SignatureExtractor
 
 logger = logging.getLogger(__name__)
@@ -184,6 +184,7 @@ class HybridExtractor:
     LUA_EXTENSIONS = {".lua"}
     LUAU_EXTENSIONS = {".luau"}
     ELIXIR_EXTENSIONS = {".ex", ".exs"}
+    JAC_EXTENSIONS = {".jac"}
 
     def __init__(self):
         self._pygments_extractor = SignatureExtractor()
@@ -229,6 +230,10 @@ class HybridExtractor:
         # Python - use native AST
         if suffix in self.PYTHON_EXTENSIONS:
             return extract_python(file_path)
+
+        # Jac - use native compiler
+        if suffix in self.JAC_EXTENSIONS:
+            return extract_jac(file_path)
 
         # JS/TS - use tree-sitter if available
         if suffix in self.TREE_SITTER_EXTENSIONS:

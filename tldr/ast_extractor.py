@@ -487,6 +487,208 @@ def extract_python(file_path: str | Path) -> ModuleInfo:
     return extractor.extract(file_path)
 
 
+###############################################################################
+# Jac (Jaclang) Extractor
+###############################################################################
+
+class JacASTExtractor:
+    """Extract code structure from Jac files using the jaclang compiler."""
+
+    def extract(self, file_path: str | Path) -> ModuleInfo:
+        """Extract module information from a Jac file."""
+        file_path = Path(file_path)
+
+        try:
+            from jaclang.jac0core.compiler import JacCompiler
+            from jaclang.jac0core.program import JacProgram
+            from jaclang.jac0core.unitree import Archetype, Ability, Import, Test, ModuleCode
+        except ImportError:
+            # Fallback if jaclang is not installed
+            return ModuleInfo(
+                file_path=str(file_path),
+                language="jac",
+                docstring=None,
+            )
+
+        compiler = JacCompiler()
+        program = JacProgram()
+        try:
+            # Note: compiler.compile might raise errors if file is invalid
+            module = compiler.compile(str(file_path), program)
+        except Exception as e:
+            logger.warning(f"Error parsing Jac file {file_path}: {e}")
+            return ModuleInfo(
+                file_path=str(file_path),
+                language="jac",
+                docstring=None,
+            )
+
+        docstring = self._get_docstring(module)
+        module_info = ModuleInfo(
+            file_path=str(file_path),
+            language="jac",
+            docstring=docstring,
+        )
+
+        for stmt in module.body:
+            if isinstance(stmt, Import):
+                self._extract_import(stmt, module_info)
+            elif isinstance(stmt, Archetype):
+                class_info = self._extract_archetype(stmt)
+                module_info.classes.append(class_info)
+            elif isinstance(stmt, Ability):
+                func_info = self._extract_ability(stmt)
+                module_info.functions.append(func_info)
+            elif isinstance(stmt, Test):
+                func_info = self._extract_test(stmt)
+                module_info.functions.append(func_info)
+            elif isinstance(stmt, ModuleCode):
+                # We could potentially look inside ModuleCode for top-level abilities/archetypes
+                # but usually they are at the top level of module.body
+                pass
+
+        return module_info
+
+    def _get_docstring(self, node: Any) -> str | None:
+        """Extract and clean docstring from a Jac node."""
+        doc_node = getattr(node, "doc", None)
+        if doc_node is None and hasattr(node, "value"): # Handle cases where node IS the docstring
+            doc_node = node
+            
+        if doc_node and hasattr(doc_node, "value"):
+            doc = doc_node.value
+            # Strip quotes (triple or single)
+            if doc.startswith('"""') and doc.endswith('"""'):
+                return doc[3:-3].strip()
+            if doc.startswith("'''") and doc.endswith("'''"):
+                return doc[3:-3].strip()
+            if doc.startswith('"') and doc.endswith('"'):
+                return doc[1:-1].strip()
+            if doc.startswith("'") and doc.endswith("'"):
+                return doc[1:-1].strip()
+            return doc
+        return None
+
+    def _get_name(self, name_node: Any) -> str:
+        """Get string name from various Jac name-holding nodes."""
+        if hasattr(name_node, "sym_name"):
+            return name_node.sym_name
+        if hasattr(name_node, "value"):
+            val = name_node.value
+            return val.strip('"').strip("'")
+        return str(name_node).strip('"').strip("'")
+
+    def _extract_import(self, node: Any, module_info: ModuleInfo) -> None:
+        """Extract import information from a Jac import statement."""
+        module_name = node.from_loc.dot_path_str if node.from_loc else ""
+        items = []
+        if node.items:
+            for item in node.items:
+                if hasattr(item, "name"):
+                    items.append(self._get_name(item.name))
+
+        module_info.imports.append(
+            ImportInfo(
+                module=module_name or ".".join(items) if not module_name else module_name,
+                names=items if module_name else [],
+                is_from=bool(module_name),
+                line_number=node.loc.first_line if hasattr(node, "loc") else 0,
+            )
+        )
+
+    def _extract_archetype(self, node: Any) -> ClassInfo:
+        """Extract class-like information from a Jac Archetype."""
+        name = self._get_name(node.name)
+        arch_type = node.arch_type.value if hasattr(node.arch_type, "value") else "obj"
+
+        # In Jac, bases are in base_classes
+        bases = []
+        if node.base_classes:
+            for base in node.base_classes:
+                try:
+                    bases.append(base.unparse())
+                except Exception:
+                    pass
+
+        class_info = ClassInfo(
+            name=name,
+            bases=bases,
+            docstring=self._get_docstring(node),
+            decorators=[f"arch:{arch_type}"],
+            line_number=node.loc.first_line if hasattr(node, "loc") else 0,
+        )
+
+        # Extract abilities (methods)
+        try:
+            from jaclang.jac0core.unitree import Ability
+            for item in node.body:
+                if isinstance(item, Ability):
+                    method = self._extract_ability(item, is_method=True)
+                    class_info.methods.append(method)
+        except ImportError:
+            pass
+
+        return class_info
+
+    def _extract_ability(self, node: Any, is_method: bool = False) -> FunctionInfo:
+        """Extract function/method information from a Jac Ability."""
+        name = self._get_name(node.name_ref) if node.name_ref else "unknown"
+        params = []
+        return_type = None
+
+        if node.signature:
+            sig = node.signature
+            if hasattr(sig, "params") and sig.params is not None:
+                for p in sig.params:
+                    param_name = self._get_name(p.name)
+                    if hasattr(p, "type_tag") and p.type_tag:
+                        try:
+                            param_name += f": {p.type_tag.tag.unparse()}"
+                        except Exception:
+                            pass
+                    params.append(param_name)
+
+            if hasattr(sig, "return_type") and sig.return_type:
+                try:
+                    return_type = sig.return_type.unparse()
+                except Exception:
+                    pass
+
+        return FunctionInfo(
+            name=name,
+            params=params,
+            return_type=return_type,
+            docstring=self._get_docstring(node),
+            is_method=is_method,
+            is_async=getattr(node, "is_async", False),
+            line_number=node.loc.first_line if hasattr(node, "loc") else 0,
+        )
+
+    def _extract_test(self, node: Any) -> FunctionInfo:
+        """Extract test block information."""
+        raw_name = self._get_name(node.name)
+        name = raw_name if raw_name.startswith("test_") else f"test_{raw_name}"
+        
+        # Test description is the docstring for tests in llm-tldr
+        docstring = self._get_docstring(node.description) if hasattr(node, "description") else None
+        
+        return FunctionInfo(
+            name=name,
+            params=[],
+            return_type=None,
+            docstring=docstring,
+            is_method=False,
+            decorators=["test"],
+            line_number=node.loc.first_line if hasattr(node, "loc") else 0,
+        )
+
+
+def extract_jac(file_path: str | Path) -> ModuleInfo:
+    """Convenience function to extract Jac module info."""
+    extractor = JacASTExtractor()
+    return extractor.extract(file_path)
+
+
 def extract_file(file_path: str | Path) -> ModuleInfo:
     """
     Extract code structure from any supported file.
